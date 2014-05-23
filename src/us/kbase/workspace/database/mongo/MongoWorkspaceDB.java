@@ -1705,6 +1705,16 @@ public class MongoWorkspaceDB implements WorkspaceDatabase {
 		//this method must maintain the order of the objects
 		
 		final ResolvedMongoWSID wsidmongo = query.convertResolvedWSID(rwsi);
+		final Set<ObjectIDNoWSNoVer> ids = new HashSet<ObjectIDNoWSNoVer>();
+		for (final ResolvedSaveObject o: objects) {
+			if (o.getObjectIdentifier() != null) {
+				ids.add(o.getObjectIdentifier());
+			}
+		}
+		
+		final Map<ObjectIDNoWSNoVer, ResolvedMongoObjectID> objIDs =
+				resolveObjectIDs(wsidmongo, ids);
+		
 		final List<ObjectSavePackage> packages = saveObjectsBuildPackages(
 				objects);
 		final Map<ObjectIDNoWSNoVer, List<ObjectSavePackage>> idToPkg =
@@ -1723,19 +1733,19 @@ public class MongoWorkspaceDB implements WorkspaceDatabase {
 		}
 		final Map<ObjectIDNoWSNoVer, ResolvedMongoObjectID> objIDs =
 				resolveObjectIDs(wsidmongo, idToPkg.keySet());
-		for (ObjectIDNoWSNoVer o: idToPkg.keySet()) {
+		for (final ObjectIDNoWSNoVer o: idToPkg.keySet()) {
 			if (!objIDs.containsKey(o)) {
 				if (o.getId() != null) {
 					throw new NoSuchObjectException(
 							"There is no object with id " + o.getId());
 				} else {
-					for (ObjectSavePackage pkg: idToPkg.get(o)) {
+					for (final ObjectSavePackage pkg: idToPkg.get(o)) {
 						pkg.name = o.getName();
 					}
 					newobjects++;
 				}
 			} else {
-				for (ObjectSavePackage pkg: idToPkg.get(o)) {
+				for (final ObjectSavePackage pkg: idToPkg.get(o)) {
 					pkg.name = objIDs.get(o).getName();
 				}
 			}
