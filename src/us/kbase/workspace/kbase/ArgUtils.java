@@ -21,6 +21,8 @@ import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.DateTimeFormatterBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import us.kbase.common.service.JsonClientException;
 import us.kbase.common.service.ServerException;
@@ -36,6 +38,7 @@ import us.kbase.auth.AuthService;
 import us.kbase.auth.AuthToken;
 import us.kbase.auth.TokenExpiredException;
 import us.kbase.auth.TokenFormatException;
+import us.kbase.workspace.ExternalDataUnit;
 import us.kbase.workspace.ObjectData;
 import us.kbase.workspace.ObjectProvenanceInfo;
 import us.kbase.workspace.ProvenanceAction;
@@ -43,6 +46,7 @@ import us.kbase.workspace.database.ByteArrayFileCacheManager.ByteArrayFileCache;
 import us.kbase.workspace.database.ObjectInformation;
 import us.kbase.workspace.database.Permission;
 import us.kbase.workspace.database.Provenance;
+import us.kbase.workspace.database.Provenance.ExternalData;
 import us.kbase.workspace.database.WorkspaceInformation;
 import us.kbase.workspace.database.WorkspaceObjectData;
 import us.kbase.workspace.database.WorkspaceObjectInformation;
@@ -54,6 +58,9 @@ import us.kbase.workspace.database.WorkspaceUser;
  *
  */
 public class ArgUtils {
+	
+	private final static Logger LOGGER =
+			LoggerFactory.getLogger(ArgUtils.class);
 	
 	private final static DateTimeFormatter DATE_PARSER =
 			new DateTimeFormatterBuilder()
@@ -87,12 +94,35 @@ public class ArgUtils {
 					.withWorkspaceObjects(a.getInputWsObjects())
 					.withIncomingArgs(a.getIntermediateIncoming())
 					.withOutgoingArgs(a.getIntermediateOutgoing())
+					.withExternalData(processExternalData(a.getExternalData()))
 					.withDescription(a.getDescription())
 					);
 		}
 		return p;
 	}
 	
+	private static List<ExternalData> processExternalData(
+			final List<ExternalDataUnit> externalData) throws ParseException {
+		final List<ExternalData> ret = new LinkedList<ExternalData>();
+		if (externalData == null) {
+			return ret;
+		}
+		for (final ExternalDataUnit edu: externalData) {
+			checkAddlArgs(edu.getAdditionalProperties(), edu.getClass());
+			ret.add(new ExternalData()
+					.withDataId(edu.getDataId())
+					.withDataUrl(edu.getDataUrl())
+					.withDescription(edu.getDescription())
+					.withResourceName(edu.getResourceName())
+					.withResourceReleaseDate(
+							parseDate(edu.getResourceReleaseDate()))
+					.withResourceUrl(edu.getResourceUrl())
+					.withResourceVersion(edu.getResourceVersion())
+					);
+		}
+		return ret;
+	}
+
 	public static Date parseDate(final String date) throws ParseException {
 		if (date == null) {
 			return null;
@@ -187,27 +217,33 @@ public class ArgUtils {
 	
 	public static Tuple11<Long, String, String, String, Long, String,
 			Long, String, String, Long, Map<String, String>>
-			objInfoToTuple(final ObjectInformation info) {
+			objInfoToTuple(
+					final ObjectInformation info,
+					final boolean logObjects) {
 		final List<ObjectInformation> m = new ArrayList<ObjectInformation>();
 		m.add(info);
-		return objInfoToTuple(m).get(0);
+		return objInfoToTuple(m, logObjects).get(0);
 	}
 
 	public static List<List<Tuple11<Long, String, String, String, Long, String, Long, String, String, Long, Map<String, String>>>>
 			translateObjectDataList(
-					final List<Set<ObjectInformation>> lsoi) {
+					final List<Set<ObjectInformation>> lsoi,
+					final boolean logObjects) {
 		final List<List<Tuple11<Long, String, String, String, Long, String,
 				Long, String, String, Long, Map<String, String>>>> ret = 
 				new LinkedList<List<Tuple11<Long,String,String,String,Long,String,Long,String,String,Long,Map<String,String>>>>();
 		for (Set<ObjectInformation> soi: lsoi) {
-			ret.add(objInfoToTuple(new LinkedList<ObjectInformation>(soi)));
+			ret.add(objInfoToTuple(new LinkedList<ObjectInformation>(soi),
+					logObjects));
 		}
 		return ret;
 	}
 	
 	public static List<Tuple11<Long, String, String, String, Long, String,
 			Long, String, String, Long, Map<String, String>>>
-			objInfoToTuple(final List<ObjectInformation> info) {
+			objInfoToTuple(
+					final List<ObjectInformation> info,
+					final boolean logObjects) {
 
 		//oh the humanity
 		final List<Tuple11<Long, String, String, String, Long, String,
@@ -218,6 +254,11 @@ public class ArgUtils {
 			if (m == null) {
 				ret.add(null);
 			} else {
+				if (logObjects) {
+					LOGGER.info("Object {}/{}/{} {}", m.getWorkspaceId(),
+							m.getObjectId(), m.getVersion(),
+							m.getTypeString());
+				}
 				ret.add(new Tuple11<Long, String, String, String, Long,
 						String, Long, String, String, Long, Map<String, String>>()
 						.withE1(m.getObjectId())
@@ -239,15 +280,19 @@ public class ArgUtils {
 	
 	public static Tuple12<String, String, String, Long, String, String, String,
 			String, String, String, Map<String, String>, Long>
-			objInfoToMetaTuple(final ObjectInformation info) {
+			objInfoToMetaTuple(
+					final ObjectInformation info,
+					final boolean logObjects) {
 		final List<ObjectInformation> m = new ArrayList<ObjectInformation>();
 		m.add(info);
-		return objInfoToMetaTuple(m).get(0);
+		return objInfoToMetaTuple(m, logObjects).get(0);
 	}
 	
 	public static List<Tuple12<String, String, String, Long, String, String, String,
 			String, String, String, Map<String, String>, Long>>
-			objInfoToMetaTuple(final List<ObjectInformation> info) {
+			objInfoToMetaTuple(
+					final List<ObjectInformation> info,
+					final boolean logObjects) {
 		//oh the humanity
 		final List<Tuple12<String, String, String, Long, String, String, String,
 		String, String, String, Map<String, String>, Long>> ret = 
@@ -255,6 +300,10 @@ public class ArgUtils {
 		String, String, String, String, Map<String, String>, Long>>();
 		
 		for (ObjectInformation m: info) {
+			if (logObjects) {
+				LOGGER.info("Object {}/{}/{} {}", m.getWorkspaceId(),
+						m.getObjectId(), m.getVersion(), m.getTypeString());
+			}
 			ret.add(new Tuple12<String, String, String, Long, String, String, String,
 					String, String, String, Map<String, String>, Long>()
 					.withE1(m.getObjectName())
@@ -345,7 +394,8 @@ public class ArgUtils {
 			final WorkspaceUser user,
 			final Set<ByteArrayFileCache> resourcesToDestroy,
 			final URL handleManagerURl,
-			final RefreshingToken handleManagertoken) {
+			final RefreshingToken handleManagertoken,
+			final boolean logObjects) {
 		final List<ObjectData> ret = new ArrayList<ObjectData>();
 		for (final WorkspaceObjectData o: objects) {
 			final HandleError error = makeHandlesReadable(
@@ -353,7 +403,7 @@ public class ArgUtils {
 			final ByteArrayFileCache resource = o.getDataAsTokens();
 			ret.add(new ObjectData()
 					.withData(resource.getUObject())
-					.withInfo(objInfoToTuple(o.getObjectInfo()))
+					.withInfo(objInfoToTuple(o.getObjectInfo(), logObjects))
 					.withProvenance(translateProvenanceActions(
 							o.getProvenance().getActions()))
 					.withCreator(o.getProvenance().getUser().getUser())
@@ -376,14 +426,15 @@ public class ArgUtils {
 			final List<WorkspaceObjectInformation> objects,
 			final WorkspaceUser user,
 			final URL handleManagerURl,
-			final RefreshingToken handleManagertoken) {
+			final RefreshingToken handleManagertoken,
+			final boolean logObjects) {
 		final List<ObjectProvenanceInfo> ret =
 				new ArrayList<ObjectProvenanceInfo>();
 		for (final WorkspaceObjectInformation o: objects) {
 			final HandleError error = makeHandlesReadable(
 					o, user, handleManagerURl, handleManagertoken);
 			ret.add(new ObjectProvenanceInfo()
-					.withInfo(objInfoToTuple(o.getObjectInfo()))
+					.withInfo(objInfoToTuple(o.getObjectInfo(), logObjects))
 					.withProvenance(translateProvenanceActions(
 							o.getProvenance().getActions()))
 					.withCreator(o.getProvenance().getUser().getUser())
@@ -518,12 +569,35 @@ public class ArgUtils {
 					.withResolvedWsObjects(a.getResolvedObjects())
 					.withIntermediateIncoming(a.getIncomingArgs())
 					.withIntermediateOutgoing(a.getOutgoingArgs())
+					.withExternalData(
+							translateExternalDataUnits(a.getExternalData()))
 					.withDescription(a.getDescription())
 					);
 		}
 		return pas;
 	}
 	
+	private static List<ExternalDataUnit> translateExternalDataUnits(
+			List<ExternalData> externalData) {
+		final List<ExternalDataUnit> ret = new LinkedList<ExternalDataUnit>();
+		if (externalData == null) {
+			return ret; //this should never happen, but just in case
+		}
+		for (final ExternalData ed: externalData) {
+			ret.add(new ExternalDataUnit()
+					.withDataId(ed.getDataId())
+					.withDataUrl(ed.getDataUrl())
+					.withDescription(ed.getDescription())
+					.withResourceName(ed.getResourceName())
+					.withResourceReleaseDate(
+							formatDate(ed.getResourceReleaseDate()))
+					.withResourceUrl(ed.getResourceUrl())
+					.withResourceVersion(ed.getResourceVersion())
+					);
+		}
+		return ret;
+	}
+
 	public static boolean longToBoolean(final Long b) {
 		if (b == null) {
 			return false;

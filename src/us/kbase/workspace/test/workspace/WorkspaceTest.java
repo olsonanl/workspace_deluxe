@@ -55,6 +55,7 @@ import us.kbase.workspace.database.ObjectIdentifier;
 import us.kbase.workspace.database.ObjectInformation;
 import us.kbase.workspace.database.Permission;
 import us.kbase.workspace.database.Provenance;
+import us.kbase.workspace.database.Provenance.ExternalData;
 import us.kbase.workspace.database.Reference;
 import us.kbase.workspace.database.ResourceUsageConfigurationBuilder;
 import us.kbase.workspace.database.WorkspaceSaveObject;
@@ -1983,7 +1984,7 @@ public class WorkspaceTest extends WorkspaceTester {
 		
 		// test basic type checking with different versions
 		WorkspaceIdentifier wsi = new WorkspaceIdentifier("wsIDHandling");
-		ws.createWorkspace(user, wsi.getName(), false, null, null);
+		long wsid = ws.createWorkspace(user, wsi.getName(), false, null, null).getId();
 		Provenance emptyprov = new Provenance(user);
 		List<WorkspaceSaveObject> objs = new LinkedList<WorkspaceSaveObject>();
 		IdReferenceHandlerSetFactory fac = new IdReferenceHandlerSetFactory(3);
@@ -2064,6 +2065,19 @@ public class WorkspaceTest extends WorkspaceTester {
 		failSave(user, wsi, objs, new TypedObjectValidationException(
 				"Object #1 has invalid reference: The type WsIDHandling.Type1-0.1 of reference wsIDHandling/t1 in this object is not allowed - allowed types are [WsIDHandling.Type2, WsIDHandling.Type3] at /ws_23/0"));
 		
+		
+		//test id path returns on parse and inaccessible object exceptions
+		data.put("ws_23", Arrays.asList(ref2, ref3));
+		innertuple.set(0, Arrays.asList("foo", "YourMotherWasAHamster"));
+		failSave(user, wsi, objs, new TypedObjectValidationException(
+				"Object #1 has unparseable reference YourMotherWasAHamster: Illegal number of separators / in object reference YourMotherWasAHamster at /ws_2/0/1"));
+		
+		innertuple.set(0, Arrays.asList("foo", ref2));
+		data.remove("ws_any");
+		ws.setObjectsDeleted(user, Arrays.asList(new ObjectIdentifier(wsi, "t1")), true);
+		failSave(user, wsi, objs, new TypedObjectValidationException(
+				"Object #1 has invalid reference: There is no object with id wsIDHandling/t1: Object 1 (name t1) in workspace " +
+						wsid + " has been deleted at /ws_12/0"));
 	}
 	
 	@Test
@@ -2271,6 +2285,17 @@ public class WorkspaceTest extends WorkspaceTester {
 				new WorkspaceSaveObject(new ObjectIDNoWSNoVer("auto1"), data, SAFE_TYPE1, null, emptyprov, false)),
 				getIdFactory(foo));
 		
+		List<ExternalData> ed = new LinkedList<ExternalData>();
+		ed.add(new ExternalData()
+				.withDataId("data id")
+				.withDataUrl("http://somedata.org/somedata")
+				.withDescription("a description")
+				.withResourceName("resource")
+				.withResourceReleaseDate(new Date(62))
+				.withResourceUrl("http://somedata.org")
+				.withResourceVersion("1.2.3")
+				);
+		ed.add(new ExternalData().withDataId("data id2"));
 		
 		Provenance p = new Provenance(foo);
 		p.addAction(new ProvenanceAction()
@@ -2285,6 +2310,7 @@ public class WorkspaceTest extends WorkspaceTester {
 				.withServiceName("service")
 				.withServiceVersion("3")
 				.withTime(new Date(45))
+				.withExternalData(ed)
 				.withWorkspaceObjects(Arrays.asList("provenance/auto3", "provenance/auto1/2")));
 		p.addAction(new ProvenanceAction()
 				.withWorkspaceObjects(Arrays.asList("provenance/auto2/1", "provenance/auto1")));
@@ -2394,7 +2420,7 @@ public class WorkspaceTest extends WorkspaceTester {
 			fail("saved too big prov");
 		} catch (IllegalArgumentException iae) {
 			assertThat("correct exception", iae.getLocalizedMessage(),
-					is("Object #1 provenance size 1000272 exceeds limit of 1000000"));
+					is("Object #1 provenance size 1000290 exceeds limit of 1000000"));
 		}
 	}
 	
