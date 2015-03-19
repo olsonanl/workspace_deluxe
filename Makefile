@@ -158,6 +158,7 @@ endif
 deploy-perl-scripts: deploy-perl-scripts-custom
 
 deploy-perl-scripts-custom:
+	if [ "$(KB_OVERRIDE_TOP)" != "" ] ; then sbase=$(KB_OVERRIDE_TOP) ; else sbase=$(TARGET); fi; \
 	export KB_TOP=$(TARGET); \
 	export KB_RUNTIME=$(DEPLOY_RUNTIME); \
 	export KB_PERL_PATH=$(TARGET)/lib ; \
@@ -166,9 +167,9 @@ deploy-perl-scripts-custom:
 		base=`basename $$src .pl`; \
 		echo install $$src $$base ; \
 		cp $$src $(TARGET)/plbin ; \
-		$(WRAP_PERL_SCRIPT) "$(TARGET)/plbin/$$basefile" $(TARGET)/bin/$$base ; \
+		$(WRAP_PERL_SCRIPT) "$$sbase/plbin/$$basefile" $(TARGET)/bin/$$base ; \
 		echo install $$src kb$$base ; \
-		$(WRAP_PERL_SCRIPT) "$(TARGET)/plbin/$$basefile" $(TARGET)/bin/kb$$base ; \
+		$(WRAP_PERL_SCRIPT) "$$sbase/plbin/$$basefile" $(TARGET)/bin/kb$$base ; \
 	done
 
 undeploy-perl-scripts:
